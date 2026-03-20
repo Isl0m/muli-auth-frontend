@@ -1,363 +1,199 @@
 "use client";
 
-import React from "react";
-
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
+import api from "@/lib/axios";
+import { startAuthentication } from "@simplewebauthn/browser";
+import { useForm } from "@tanstack/react-form";
+import { AlertCircle, CheckCircle2, Fingerprint, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type AuthStep =
-  | "method-select"
-  | "email-entry"
-  | "register-device"
-  | "authenticate"
-  | "success";
+type Mode = "login" | "register";
 
 export default function BiometricAuthPage() {
-  const [step, setStep] = useState<AuthStep>("method-select");
-  const [email, setEmail] = useState("");
-  const [deviceName, setDeviceName] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [biometricType, setBiometricType] = useState<
-    "fingerprint" | "face" | "key"
-  >("fingerprint");
+  const [mode, setMode] = useState<Mode>("login");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const router = useRouter();
 
-  const handleWebAuthnRegister = async () => {
-    setError("");
-    setLoading(true);
+  const form = useForm({
+    defaultValues: {
+      email: "",
+    },
+    onSubmit: async ({ value }) => {
+      setError(null);
+      setSuccess(null);
 
-    try {
-      // WebAuthn registration would go here
-      console.log("[v0] WebAuthn registration:", {
-        email,
-        biometricType,
-        deviceName,
-      });
+      if (mode === "login") {
+        try {
+          const { data: options } = await api.post(
+            "/auth/webauthn/login/options",
+            {
+              email: value.email,
+            },
+            { withCredentials: true },
+          );
+          const credential = await startAuthentication(options);
+          const { data: result } = await api.post(
+            "/auth/webauthn/login/verify",
+            { credential },
+            { withCredentials: true },
+          );
 
-      // Simulate WebAuthn API call
-      if (!window.PublicKeyCredential) {
-        setError("WebAuthn is not supported on this browser");
-        setLoading(false);
-        return;
+          if (result) {
+            localStorage.setItem("access_token", result.accessToken);
+            localStorage.setItem("refresh_token", result.refreshToken);
+            setSuccess("Biometric verified. Redirecting...");
+            router.push("/dashboard");
+          }
+        } catch (err: any) {
+          setError(
+            err.response?.data?.message || "Biometric assertion failed.",
+          );
+        }
+      } else {
+        try {
+          await api.post("/auth/webauthn/register/start", {
+            email: value.email,
+          });
+          setSuccess("Registration link dispatched to your inbox.");
+        } catch (err: any) {
+          setError("Failed to initiate registration.");
+        }
       }
-
-      setSuccess("Biometric device registered successfully!");
-      setStep("success");
-    } catch (err) {
-      setError("Failed to register device. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleWebAuthnAuthenticate = async () => {
-    setError("");
-    setLoading(true);
-
-    try {
-      console.log("[v0] WebAuthn authentication:", { email, biometricType });
-
-      // Simulate WebAuthn API call
-      if (!window.PublicKeyCredential) {
-        setError("WebAuthn is not supported on this browser");
-        setLoading(false);
-        return;
-      }
-
-      setSuccess("Biometric authentication successful!");
-      setStep("success");
-    } catch (err) {
-      setError("Authentication failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      console.log("[v0] Email lookup:", { email });
-      // Here you would check if the user exists and if they have any registered biometric devices
-      // For demo, assume they don't have devices yet
-      setStep("register-device");
-    } catch (err) {
-      setError("Email lookup failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="absolute top-8 left-8">
-        <Link href="/">
-          <Button variant="ghost" className="gap-2">
-            ← Back
-          </Button>
-        </Link>
-      </div>
-
-      <div className="w-full max-w-md">
-        <Card className="p-8 border-border">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              {step === "method-select" && "Biometric Authentication"}
-              {step === "email-entry" && "Your Email"}
-              {step === "register-device" &&
-                `Register ${biometricType === "fingerprint" ? "Fingerprint" : biometricType === "face" ? "Face" : "Security Key"}`}
-              {step === "authenticate" &&
-                `Authenticate with ${biometricType === "fingerprint" ? "Fingerprint" : biometricType === "face" ? "Face" : "Security Key"}`}
-              {step === "success" && "Success!"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {step === "method-select" &&
-                "Choose how you want to authenticate using WebAuthn"}
-              {step === "email-entry" &&
-                "We need your email to connect your biometric"}
-              {step === "register-device" &&
-                "Follow the prompts on your device to register"}
-              {step === "authenticate" && "Use your biometric to sign in"}
-              {step === "success" && "You have been successfully authenticated"}
-            </p>
+    <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
+      <CardHeader className="space-y-1 text-center">
+        <div className="flex justify-center mb-4">
+          <div className="bg-muted p-1 rounded-lg inline-flex">
+            <button
+              onClick={() => {
+                setMode("login");
+                setError(null);
+                setSuccess(null);
+              }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                mode === "login"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => {
+                setMode("register");
+                setError(null);
+                setSuccess(null);
+              }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                mode === "register"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Register
+            </button>
           </div>
+        </div>
+        <CardTitle className="text-2xl font-bold tracking-tight">
+          {mode === "login" ? "Biometric Access" : "Secure Setup"}
+        </CardTitle>
+        <CardDescription>
+          {mode === "login"
+            ? "Hardware-backed identity verification."
+            : "Initialize passkey credential pairing."}
+        </CardDescription>
+      </CardHeader>
 
-          {/* Error Alert */}
+      <CardContent>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field
+            name="email"
+            children={(field) => (
+              <div className="space-y-2">
+                <Label htmlFor={field.name}>Identity ID</Label>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="email"
+                  placeholder="name@example.com"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  className="bg-background/50"
+                />
+              </div>
+            )}
+          />
+
           {error && (
-            <Alert className="mb-6 border-destructive/50 bg-destructive/10">
-              <AlertDescription className="text-destructive">
+            <Alert variant="destructive" className="py-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="ml-2 text-xs font-medium">
                 {error}
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Success Alert */}
           {success && (
-            <Alert className="mb-6 border-green-200 bg-green-50">
-              <AlertDescription className="text-green-800">
+            <Alert className="py-2 border-emerald-500/50 text-emerald-500 bg-emerald-500/10">
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription className="ml-2 text-xs font-medium">
                 {success}
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Method Selection Step */}
-          {step === "method-select" && (
-            <div className="space-y-4">
-              <div
-                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                  biometricType === "fingerprint"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                }`}
-                onClick={() => setBiometricType("fingerprint")}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">👆</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">
-                      Fingerprint Scanner
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Use your fingerprint for quick and secure access
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Compatible with most modern devices
-                    </p>
-                  </div>
-                  {biometricType === "fingerprint" && (
-                    <div className="w-4 h-4 rounded-full bg-primary mt-1" />
-                  )}
-                </div>
-              </div>
-
+          <form.Subscribe
+            selector={(state) => [state.canSubmit, state.isSubmitting]}
+            children={([canSubmit, isSubmitting]) => (
               <Button
-                className="w-full mt-6"
-                onClick={() => setStep("email-entry")}
+                type="submit"
+                className="w-full font-semibold"
+                disabled={!canSubmit || isSubmitting}
               >
-                Continue with{" "}
-                {biometricType === "fingerprint"
-                  ? "Fingerprint"
-                  : biometricType === "face"
-                    ? "Face"
-                    : "Security Key"}
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : mode === "login" ? (
+                  <Fingerprint className="w-4 h-4 mr-2" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                )}
+                {isSubmitting
+                  ? "Processing..."
+                  : mode === "login"
+                    ? "Authorize Session"
+                    : "Send Secure Link"}
               </Button>
-            </div>
-          )}
-
-          {/* Email Entry Step */}
-          {step === "email-entry" && (
-            <form onSubmit={handleEmailSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                  className="bg-card"
-                  autoFocus
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Checking..." : "Continue"}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setStep("method-select")}
-              >
-                Back
-              </Button>
-            </form>
-          )}
-
-          {/* Register Device Step */}
-          {step === "register-device" && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleWebAuthnRegister();
-              }}
-              className="space-y-6"
-            >
-              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-                <p className="text-sm text-foreground">
-                  First time setting up? Let's register your{" "}
-                  {biometricType === "fingerprint"
-                    ? "fingerprint"
-                    : biometricType === "face"
-                      ? "face"
-                      : "security key"}
-                  .
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="device-name">Device Name (optional)</Label>
-                <Input
-                  id="device-name"
-                  placeholder={`e.g., My ${biometricType === "fingerprint" ? "Phone" : biometricType === "face" ? "Laptop" : "YubiKey"}`}
-                  value={deviceName}
-                  onChange={(e) => setDeviceName(e.target.value)}
-                  disabled={loading}
-                  className="bg-card"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This helps you identify the device later
-                </p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
-                  📱 When you click "Register", you will be prompted to use your{" "}
-                  {biometricType === "fingerprint"
-                    ? "fingerprint"
-                    : biometricType === "face"
-                      ? "face"
-                      : "security key"}{" "}
-                  on your device.
-                </p>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading
-                  ? "Registering..."
-                  : `Register ${biometricType === "fingerprint" ? "Fingerprint" : biometricType === "face" ? "Face" : "Security Key"}`}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setStep("email-entry")}
-              >
-                Back
-              </Button>
-            </form>
-          )}
-
-          {/* Authenticate Step */}
-          {step === "authenticate" && (
-            <div className="space-y-6">
-              <div className="text-center py-8">
-                <div className="text-6xl mb-4">
-                  {biometricType === "fingerprint"
-                    ? "👆"
-                    : biometricType === "face"
-                      ? "😊"
-                      : "🔐"}
-                </div>
-                <p className="text-foreground font-medium">
-                  Use your{" "}
-                  {biometricType === "fingerprint"
-                    ? "fingerprint"
-                    : biometricType === "face"
-                      ? "face"
-                      : "security key"}
-                </p>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={handleWebAuthnAuthenticate}
-                disabled={loading}
-              >
-                {loading
-                  ? "Authenticating..."
-                  : `Authenticate with ${biometricType === "fingerprint" ? "Fingerprint" : biometricType === "face" ? "Face" : "Security Key"}`}
-              </Button>
-
-              <Button
-                variant="outline"
-                className="w-full bg-transparent"
-                onClick={() => setStep("email-entry")}
-              >
-                Back
-              </Button>
-            </div>
-          )}
-
-          {/* Success Step */}
-          {step === "success" && (
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-3xl">✓</span>
-                </div>
-              </div>
-
-              <div className="text-center space-y-2">
-                <p className="text-foreground font-medium">
-                  Authentication successful!
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Your biometric credential has been verified. Redirecting to
-                  your dashboard...
-                </p>
-              </div>
-
-              <Button className="w-full" asChild>
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            </div>
-          )}
-        </Card>
-      </div>
-    </main>
+            )}
+          />
+        </form>
+      </CardContent>
+      <CardFooter className="flex flex-col gap-2 text-center text-xs text-muted-foreground">
+        WebAuthn L3 Compliant Secure Protocol
+      </CardFooter>
+    </Card>
   );
 }

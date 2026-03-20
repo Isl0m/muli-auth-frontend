@@ -1,106 +1,128 @@
 "use client";
 
-import React from "react";
-
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/axios";
-import Link from "next/link";
+import { useForm } from "@tanstack/react-form";
+import { AlertCircle, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { useState } from "react";
 
-type AuthStep = "email-entry" | "success";
-
 export default function PasswordlessAuthPage() {
-  const [step, setStep] = useState<AuthStep>("email-entry");
-  const [email, setEmail] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const handleEmailSubmit = async (e: React.SubmitEvent) => {
-    e.preventDefault();
-    setSuccess("");
-    setLoading(true);
-
-    try {
-      await api.post("/auth/passwordless/send-magic-link", {
-        email,
-      });
-      setStep("success");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const form = useForm({
+    defaultValues: {
+      email: "",
+    },
+    onSubmit: async ({ value }) => {
+      setError(null);
+      try {
+        await api.post("/auth/passwordless/send-magic-link", value);
+        setSuccess(true);
+      } catch (err: any) {
+        setError("Transmission failure. Check system status.");
+      }
+    },
+  });
 
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="absolute top-8 left-8">
-        <Link href="/">
-          <Button variant="ghost" className="gap-2">
-            ← Back
-          </Button>
-        </Link>
-      </div>
+    <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
+      <CardHeader className="space-y-1 text-center">
+        <div className="flex justify-center mb-4">
+          <div className="p-3 rounded-2xl bg-muted border border-border/50">
+            <Mail className="w-6 h-6 text-foreground" strokeWidth={1.2} />
+          </div>
+        </div>
+        <CardTitle className="text-2xl font-bold tracking-tight">
+          Magic Link
+        </CardTitle>
+        <CardDescription>
+          Secure one-time identity assertion link.
+        </CardDescription>
+      </CardHeader>
 
-      <div className="w-full max-w-md">
-        <Card className="p-8 border-border">
-          {step === "email-entry" && (
-            <div className="mb-4">
-              <h1 className="text-3xl font-bold text-foreground mb-2">
-                Passwordless Login
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Enter your email to receive a secure login link or code.
+      <CardContent>
+        {!success ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              form.handleSubmit();
+            }}
+            className="space-y-4"
+          >
+            <form.Field
+              name="email"
+              children={(field) => (
+                <div className="space-y-2">
+                  <Label htmlFor={field.name}>Recipient Identity</Label>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="email"
+                    placeholder="name@example.com"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="bg-background/50"
+                  />
+                </div>
+              )}
+            />
+
+            {error && (
+              <Alert variant="destructive" className="py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="ml-2 text-xs font-medium">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <form.Subscribe
+              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              children={([canSubmit, isSubmitting]) => (
+                <Button
+                  type="submit"
+                  className="w-full font-semibold"
+                  disabled={!canSubmit || isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Mail className="w-4 h-4 mr-2" />
+                  )}
+                  {isSubmitting ? "Processing..." : "Dispatch Access Link"}
+                </Button>
+              )}
+            />
+          </form>
+        ) : (
+          <div className="py-6 flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-500">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-foreground tracking-wider">
+                Transmission Verified
+              </p>
+              <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Identity assertion link dispatched to your inbox.
               </p>
             </div>
-          )}
-
-          {/* Email Entry Step */}
-          {step === "email-entry" && (
-            <form onSubmit={handleEmailSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                  className="bg-card"
-                  autoFocus
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Sending..." : `Send Magic Link`}
-              </Button>
-            </form>
-          )}
-
-          {/* Success Step */}
-          {step === "success" && (
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-3xl">✓</span>
-                </div>
-              </div>
-
-              <div className="text-center space-y-2">
-                <p className="text-foreground font-medium">Email Sent!</p>
-                <p className="text-sm text-muted-foreground">
-                  Check your email for a magic link to log in.
-                </p>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-    </main>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

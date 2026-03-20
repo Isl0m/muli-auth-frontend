@@ -1,36 +1,39 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import api from "@/lib/axios";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 
-export default function VerifyPasswordlessPage() {
+function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-
-  // Use state to manage the UI lifecycle
-  const [status, setStatus] = useState<"loading" | "error" | "invalid">(
-    "loading",
-  );
+  const [status, setStatus] = useState<"loading" | "error" | "invalid">("loading");
 
   useEffect(() => {
-    // 1. Immediate validation
     if (!token) {
       setStatus("invalid");
       return;
     }
 
-    // 2. Define the async logic
     const verifyToken = async () => {
       try {
         const response = await api.post("/auth/passwordless/verify", { token });
-
-        if (response.status === 200) {
-          localStorage.setItem("access_token", response.data.token);
-          router.push("/dashboard");
+        if (response.data) {
+           localStorage.setItem("access_token", response.data.accessToken);
+           localStorage.setItem("refresh_token", response.data.refreshToken);
+           router.push("/dashboard");
         } else {
-          setStatus("error");
+           setStatus("error");
         }
       } catch (error) {
         console.error("Verification failed:", error);
@@ -41,26 +44,53 @@ export default function VerifyPasswordlessPage() {
     verifyToken();
   }, [token, router]);
 
-  if (status === "invalid") {
-    return (
-      <div className="p-10 text-2xl text-red-500">
-        Invalid or missing token.
-      </div>
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <div className="p-10 text-2xl text-red-500">
-        Verification failed. The link may have expired.
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      <p className="mt-4 text-xl">Verifying your login...</p>
-    </div>
+    <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
+      <CardHeader className="space-y-1 text-center">
+        <CardTitle className="text-2xl font-bold tracking-tight">
+          Verifying Identity
+        </CardTitle>
+        <CardDescription>
+          {status === "loading"
+            ? "Please wait while we authenticate your session."
+            : status === "invalid"
+            ? "The security token is missing or malformed."
+            : "The verification link may have expired or already been used."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex justify-center py-6">
+        {status === "loading" && (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground animate-pulse">
+              Establishing secure connection...
+            </p>
+          </div>
+        )}
+
+        {(status === "error" || status === "invalid") && (
+          <Alert variant="destructive" className="py-2">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="ml-2 text-xs font-medium">
+              {status === "invalid"
+                ? "Invalid or missing token."
+                : "Verification failed. Please try requesting a new magic link."}
+            </AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function VerifyPasswordlessPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <VerifyContent />
+    </Suspense>
   );
 }
