@@ -1,8 +1,5 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
@@ -12,12 +9,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import api from "@/lib/axios";
+import axios from "axios";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+
+type ApiError = {
+  message?: string;
+  error?: string;
+  statusCode?: number;
+};
 
 function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const [status, setStatus] = useState<"loading" | "error" | "invalid">("loading");
+  const [status, setStatus] = useState<"loading" | "error" | "invalid">(
+    "loading",
+  );
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   useEffect(() => {
     if (!token) {
@@ -29,14 +39,14 @@ function VerifyContent() {
       try {
         const response = await api.post("/auth/passwordless/verify", { token });
         if (response.data) {
-           localStorage.setItem("access_token", response.data.accessToken);
-           localStorage.setItem("refresh_token", response.data.refreshToken);
-           router.push("/dashboard");
+          router.push("/dashboard");
         } else {
-           setStatus("error");
+          setStatus("error");
         }
-      } catch (error) {
-        console.error("Verification failed:", error);
+      } catch (error: unknown) {
+        if (axios.isAxiosError<ApiError>(error) && error.response?.data) {
+          setErrorMessage(error.response.data.message);
+        }
         setStatus("error");
       }
     };
@@ -54,8 +64,8 @@ function VerifyContent() {
           {status === "loading"
             ? "Please wait while we authenticate your session."
             : status === "invalid"
-            ? "The security token is missing or malformed."
-            : "The verification link may have expired or already been used."}
+              ? "The security token is missing or malformed."
+              : "The verification link may have expired or already been used."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex justify-center py-6">
@@ -74,7 +84,8 @@ function VerifyContent() {
             <AlertDescription className="ml-2 text-xs font-medium">
               {status === "invalid"
                 ? "Invalid or missing token."
-                : "Verification failed. Please try requesting a new magic link."}
+                : (errorMessage ??
+                  "Verification failed. Please try requesting a new magic link.")}
             </AlertDescription>
           </Alert>
         )}
@@ -85,11 +96,13 @@ function VerifyContent() {
 
 export default function VerifyPasswordlessPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
       <VerifyContent />
     </Suspense>
   );

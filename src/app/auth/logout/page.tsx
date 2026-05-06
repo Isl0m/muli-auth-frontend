@@ -1,27 +1,33 @@
 "use client";
 
+import api from "@/lib/axios";
+import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export default function LogoutPage() {
   const router = useRouter();
+  const hasLoggedOut = useRef(false);
 
   useEffect(() => {
     const logout = async () => {
-      try {
-        // Try to call backend logout endpoint
-        // await api.post("/auth/logout");
-      } catch (error) {
-        // We still want to clear local storage and redirect even if the server call fails
-        console.error("Logout request failed:", error);
-      } finally {
-        // Clear tokens from local storage
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
+      if (hasLoggedOut.current) {
+        return;
+      }
 
-        // Redirect to home page
-        router.push("/");
+      hasLoggedOut.current = true;
+
+      try {
+        await api.post("/auth/logout");
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.data) {
+          console.error("Logout request failed:", error.response.data);
+        } else {
+          console.error("Logout request failed:", error);
+        }
+      } finally {
+        router.replace("/");
       }
     };
 

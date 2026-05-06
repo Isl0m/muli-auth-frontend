@@ -37,8 +37,6 @@ export default function PasswordAuthPage() {
       try {
         const response = await api.post(endpoint, value);
         if (response.data) {
-          localStorage.setItem("access_token", response.data.accessToken);
-          localStorage.setItem("refresh_token", response.data.refreshToken);
           router.push("/dashboard");
         }
       } catch (err: any) {

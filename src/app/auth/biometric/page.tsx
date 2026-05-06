@@ -52,8 +52,6 @@ export default function BiometricAuthPage() {
           );
 
           if (result) {
-            localStorage.setItem("access_token", result.accessToken);
-            localStorage.setItem("refresh_token", result.refreshToken);
             setSuccess("Biometric verified. Redirecting...");
             router.push("/dashboard");
           }

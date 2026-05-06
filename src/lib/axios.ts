@@ -1,18 +1,11 @@
 "use client";
 import axios from "axios";
 
+const apiBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
+
 const api = axios.create({
-  baseURL: "http://localhost:3000/api/v1",
-});
-
-// Automatically add the token to every request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  baseURL: apiBaseURL,
+  withCredentials: true,
 });
 
 export default api;
