@@ -1,12 +1,17 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card/30 backdrop-blur-xl fixed h-full z-30">
@@ -24,7 +29,13 @@ export default function DashboardLayout({
             href="/dashboard"
             icon={<LayoutDashboard className="w-4 h-4" />}
             label="Overview"
-            active
+            active={pathname === "/dashboard"}
+          />
+          <NavItem
+            href="/dashboard/mfa"
+            icon={<ShieldCheck className="w-4 h-4" />}
+            label="Two-Factor Auth"
+            active={pathname === "/dashboard/mfa"}
           />
         </nav>
 
